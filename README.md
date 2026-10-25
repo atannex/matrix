@@ -1,5 +1,10 @@
 # atannex/matrix
 
+[![Tests](https://github.com/atannex/matrix/actions/workflows/tests.yml/badge.svg)](https://github.com/atannex/matrix/actions/workflows/tests.yml)
+[![PHP](https://img.shields.io/badge/PHP-8.3%2B-777BB4?logo=php&logoColor=white)](composer.json)
+[![Laravel](https://img.shields.io/badge/Laravel-11%20%7C%2012-FF2D20?logo=laravel&logoColor=white)](composer.json)
+[![License: MIT](https://img.shields.io/badge/License-MIT-2ea44f.svg)](LICENSE)
+
 The engagement matrix for Laravel. One package for every way people engage with your content: **views, reading time, click-throughs, shares, reactions (like / dislike / love / …), ratings (multi-criteria), reviews, threaded comments, bookmarks, follows and reports**. It works on any Eloquent model, for guests and signed-in accounts alike, and keeps running totals, daily rollups, rankings, trending, moderation and a JSON API in step.
 
 ```php

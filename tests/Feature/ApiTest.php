@@ -54,11 +54,11 @@ class ApiTest extends TestCase
             ->assertJsonMissing(['guest_email' => 'zara@example.com']);
     }
 
-    public function test_closed_items_refuse_with_403(): void
+    public function test_closed_items_answer_404(): void
     {
         $token = $this->article(['published' => false])->matrixToken();
 
-        $this->postJson("/matrix/{$token}/reactions", ['type' => 'like'])->assertForbidden();
+        $this->postJson("/matrix/{$token}/reactions", ['type' => 'like'])->assertNotFound();
     }
 
     public function test_beacons_count_views_and_reading(): void

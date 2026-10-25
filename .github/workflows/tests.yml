@@ -1,0 +1,46 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    name: PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.3', '8.4']
+        laravel: ['11.*', '12.*']
+        include:
+          - laravel: '11.*'
+            testbench: '9.*'
+          - laravel: '12.*'
+            testbench: '10.*'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # composer.json points at ../scopable (a path repository), as in the
+      # ATANNEX monorepo, so clone it next to this checkout.
+      - name: Check out atannex/scopable
+        run: git clone --depth 1 https://github.com/atannex/scopable.git ../scopable
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pdo_sqlite, sqlite3, mbstring
+          coverage: none
+
+      - name: Install dependencies
+        run: |
+          composer require "illuminate/support:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --dev --no-interaction --no-update
+          composer update --prefer-dist --no-interaction --no-progress
+
+      - name: Run tests
+        run: vendor/bin/phpunit
