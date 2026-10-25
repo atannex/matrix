@@ -263,7 +263,10 @@ final class Matrix
         }
 
         if ($live && $statusChanged) {
-            $from = $content->getPrevious()['status'] ?? null;
+            // getPrevious() is Laravel 12+; on 11 the original is still unsynced inside `saved`.
+            $from = method_exists($content, 'getPrevious')
+                ? ($content->getPrevious()['status'] ?? null)
+                : $content->getRawOriginal('status');
 
             $this->dispatch(new Moderated($content, $this->actor(), $content, [
                 'from' => $from instanceof Status ? $from : Status::tryFrom((string) $from),
