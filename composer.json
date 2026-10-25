@@ -1,0 +1,82 @@
+{
+    "name": "atannex/matrix",
+    "description": "The engagement matrix for Laravel: views, reading time, clicks, reactions, ratings, reviews, threaded comments, shares, bookmarks, follows and reports for any Eloquent model, for guests and accounts alike, with running counters, daily rollups, trending, scoring, moderation and a JSON API.",
+    "keywords": [
+        "laravel",
+        "engagement",
+        "likes",
+        "reactions",
+        "ratings",
+        "reviews",
+        "comments",
+        "views",
+        "shares",
+        "bookmarks",
+        "follows",
+        "analytics",
+        "trending"
+    ],
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Atanga Leke Collins",
+            "email": "atangageihlekecollins@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^8.3",
+        "atannex/scopable": "@dev",
+        "illuminate/auth": "^11.0|^12.0",
+        "illuminate/cache": "^11.0|^12.0",
+        "illuminate/console": "^11.0|^12.0",
+        "illuminate/cookie": "^11.0|^12.0",
+        "illuminate/database": "^11.0|^12.0",
+        "illuminate/events": "^11.0|^12.0",
+        "illuminate/http": "^11.0|^12.0",
+        "illuminate/routing": "^11.0|^12.0",
+        "illuminate/support": "^11.0|^12.0",
+        "illuminate/validation": "^11.0|^12.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^9.0|^10.0",
+        "phpunit/phpunit": "^11.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "Atannex\\Matrix\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Atannex\\Matrix\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Atannex\\Matrix\\MatrixServiceProvider"
+            ],
+            "aliases": {
+                "Matrix": "Atannex\\Matrix\\Facades\\Matrix"
+            }
+        }
+    },
+    "scripts": {
+        "test": "phpunit"
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../scopable",
+            "options": {
+                "symlink": true
+            }
+        }
+    ]
+}
