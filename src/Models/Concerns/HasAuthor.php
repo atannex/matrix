@@ -18,7 +18,7 @@ trait HasAuthor
 
     public function initializeHasAuthor(): void
     {
-        $this->mergeHidden(['guest_email']);
+        $this->makeHidden(['guest_email']);
         $this->mergeCasts(['edited_at' => 'datetime']);
     }
 

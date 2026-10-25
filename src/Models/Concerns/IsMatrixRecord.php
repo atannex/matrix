@@ -24,7 +24,7 @@ trait IsMatrixRecord
 
     public function initializeIsMatrixRecord(): void
     {
-        $this->mergeHidden(['actor_key', 'session_id', 'ip_address', 'user_agent']);
+        $this->makeHidden(['actor_key', 'session_id', 'ip_address', 'user_agent']);
     }
 
     public function getTable(): string
