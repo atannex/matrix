@@ -25,11 +25,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # composer.json points at ../scopable (a path repository), as in the
-      # ATANNEX monorepo, so clone it next to this checkout.
-      - name: Check out atannex/scopable
-        run: git clone --depth 1 https://github.com/atannex/scopable.git ../scopable
-
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:

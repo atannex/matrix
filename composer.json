@@ -26,7 +26,7 @@
     ],
     "require": {
         "php": "^8.3",
-        "atannex/scopable": "@dev",
+        "atannex/scopable": "^1.0",
         "illuminate/auth": "^11.0|^12.0",
         "illuminate/cache": "^11.0|^12.0",
         "illuminate/console": "^11.0|^12.0",
@@ -60,6 +60,9 @@
             "aliases": {
                 "Matrix": "Atannex\\Matrix\\Facades\\Matrix"
             }
+        },
+        "branch-alias": {
+            "dev-main": "1.x-dev"
         }
     },
     "scripts": {
@@ -69,14 +72,5 @@
         "sort-packages": true
     },
     "minimum-stability": "stable",
-    "prefer-stable": true,
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../scopable",
-            "options": {
-                "symlink": true
-            }
-        }
-    ]
+    "prefer-stable": true
 }
