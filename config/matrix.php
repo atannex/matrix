@@ -52,6 +52,9 @@ return [
     'privacy' => [
         'anonymize_ip' => (bool) env('MATRIX_ANONYMIZE_IP', true),
         'count_bots' => false,
+        // auto: atannex/detector decides what is a bot when it is installed,
+        // a name pattern otherwise. pattern: always the name pattern.
+        'bot_detection' => 'auto',
     ],
 
     /*

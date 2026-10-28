@@ -362,7 +362,7 @@ Matrix::extend(new PledgeSignal);   // add config('matrix.models.pledge'), ('mat
 
 ## Configuration reference
 
-See `config/matrix.php`: actor cookie, privacy (`anonymize_ip`, `count_bots`), per-signal settings (`guests`, view `window`, read `max_seconds`, click `debounce`/`retention`, share `platforms`), reaction types with emoji and sentiment, rating scale, dimensions and Bayesian prior, comment and review rules, report reasons and threshold, score weights and gravity, rate limits, token lifetime, routes, models and tables.
+See `config/matrix.php`: actor cookie, privacy (`anonymize_ip`, `count_bots`, `bot_detection`: with [atannex/detector](https://github.com/atannex/detector) installed its bot list decides what is never counted, otherwise a name pattern), per-signal settings (`guests`, view `window`, read `max_seconds`, click `debounce`/`retention`, share `platforms`), reaction types with emoji and sentiment, rating scale, dimensions and Bayesian prior, comment and review rules, report reasons and threshold, score weights and gravity, rate limits, token lifetime, routes, models and tables.
 
 Swap any model for your own subclass (`matrix.models.*`) to add relations, casts or activity logging.
 

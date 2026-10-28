@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Atannex\Matrix;
 
+use Atannex\Detector\Detector;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
@@ -81,7 +82,9 @@ final readonly class Actor
     }
 
     /**
-     * Crawlers, link previews, monitors and scripts are never counted.
+     * Crawlers, link previews, monitors and scripts are never counted. With
+     * atannex/detector installed its bot list decides (200+ named bots,
+     * headless browsers and HTTP clients); otherwise a name pattern does.
      */
     public function isBot(): bool
     {
@@ -91,6 +94,10 @@ final readonly class Actor
 
         if ($this->userAgent === null || trim($this->userAgent) === '') {
             return true;
+        }
+
+        if (config('matrix.privacy.bot_detection', 'auto') === 'auto' && class_exists(Detector::class) && app()->bound(Detector::class)) {
+            return app(Detector::class)->parse($this->userAgent)->isBot();
         }
 
         return (bool) preg_match(

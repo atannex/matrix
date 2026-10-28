@@ -42,6 +42,9 @@
         "orchestra/testbench": "^9.0|^10.0",
         "phpunit/phpunit": "^11.5"
     },
+    "suggest": {
+        "atannex/detector": "Recognises 200+ named bots, headless browsers and HTTP clients so they are never counted (privacy.bot_detection)"
+    },
     "autoload": {
         "psr-4": {
             "Atannex\\Matrix\\": "src/"
