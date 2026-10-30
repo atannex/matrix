@@ -7,11 +7,3 @@ Handles reader engagement for any Laravel model: views, reading time, clicks, re
 ```bash
 composer require atannex/matrix
 ```
-
-## Documentation
-
-The full guide is in [docs/README.md](docs/README.md).
-
-## License
-
-MIT.
