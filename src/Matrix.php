@@ -15,6 +15,7 @@ use Atannex\Matrix\Models\Comment;
 use Atannex\Matrix\Models\Review;
 use Atannex\Matrix\Signals\Registry;
 use Atannex\Matrix\Signals\Signal;
+use Atannex\Matrix\Support\Connections;
 use Atannex\Matrix\Support\Counters;
 use Atannex\Matrix\Support\Moderation;
 use Atannex\Matrix\Support\Throttle;
@@ -23,6 +24,7 @@ use Closure;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
@@ -294,13 +296,16 @@ final class Matrix
 
         $affected = [];
 
-        $this->counters->connection()->transaction(function () use ($guestKey, $account, &$affected) {
+        // Each signal moves the guest's rows on every connection that holds engagement (Support\Connections).
+        $transfer = function () use ($guestKey, $account, &$affected) {
             foreach ($this->signals->all() as $signal) {
                 foreach ($signal->transfer($guestKey, $account) as $item) {
                     $affected[$item['type'].'|'.$item['id']] = $item;
                 }
             }
-        });
+        };
+
+        $this->transactionOnEach(Connections::all(), $transfer);
 
         // Merged rows change unique viewers, likes and ratings: recount those items.
         foreach ($affected as $item) {
@@ -359,5 +364,23 @@ final class Matrix
     public function actors(): ResolvesActors
     {
         return $this->actors;
+    }
+
+    /**
+     * Run $work inside a transaction on each connection, nested, so it is
+     * kept or rolled back on all of them together as far as each database allows.
+     *
+     * @param  list<string|null>  $connections
+     */
+    private function transactionOnEach(array $connections, callable $work): void
+    {
+        if ($connections === []) {
+            $work();
+
+            return;
+        }
+
+        $first = array_shift($connections);
+        DB::connection($first)->transaction(fn () => $this->transactionOnEach($connections, $work));
     }
 }

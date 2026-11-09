@@ -52,7 +52,7 @@ class ClickSignal extends Signal
 
         $placement = $this->clean($context['placement'] ?? null, 80);
 
-        $click = $this->newQuery()->create([
+        $click = $this->newQuery($item)->create([
             ...$this->subjectKey($item),
             ...$actor->attributes([]),
             'placement' => $placement,

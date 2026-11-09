@@ -34,7 +34,7 @@ class ReportSignal extends Signal
 
     public function recount(string $type, int|string $id): array
     {
-        $count = $this->base()->where('engageable_type', $type)->where('engageable_id', $id)->where('status', ReportStatus::Open->value)->count();
+        $count = $this->base($type)->where('engageable_type', $type)->where('engageable_id', $id)->where('status', ReportStatus::Open->value)->count();
 
         return $count > 0 ? ['reports' => $count] : [];
     }
@@ -57,7 +57,7 @@ class ReportSignal extends Signal
             $this->guardReportable($item, $actor);
         }
 
-        $report = $this->newQuery()->updateOrCreate(
+        $report = $this->newQuery($item)->updateOrCreate(
             $this->subjectKey($item) + ['actor_key' => $actor->key],
             [...$actor->attributes(fullIp: true), 'reason' => $reason, 'details' => $details === null ? null : mb_substr(trim($details), 0, 2000),
                 'status' => ReportStatus::Open, 'resolved_by' => null, 'resolved_at' => null, 'resolution' => null],

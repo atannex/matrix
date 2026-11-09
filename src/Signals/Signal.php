@@ -6,6 +6,7 @@ namespace Atannex\Matrix\Signals;
 
 use Atannex\Matrix\Actor;
 use Atannex\Matrix\Matrix;
+use Atannex\Matrix\Support\Connections;
 use Atannex\Matrix\Support\Counters;
 use Illuminate\Database\Connection;
 use Illuminate\Database\Eloquent\Builder;
@@ -96,11 +97,16 @@ abstract class Signal
         return config("matrix.tables.{$this->name()}");
     }
 
-    public function newQuery(): Builder
+    /**
+     * A query on this signal's rows, on the connection that holds engagement
+     * about $for (an item or a morph type; Support\Connections).
+     */
+    public function newQuery(Model|string|null $for = null): Builder
     {
         $model = $this->model();
+        $type = $for instanceof Model ? $for->getMorphClass() : $for;
 
-        return $model::query();
+        return $model::on($this->connectionName($type));
     }
 
     /**
@@ -108,7 +114,7 @@ abstract class Signal
      */
     public function about(Model $item): Builder
     {
-        return $this->newQuery()
+        return $this->newQuery($item)
             ->where('engageable_type', $item->getMorphClass())
             ->where('engageable_id', $item->getKey());
     }
@@ -130,11 +136,17 @@ abstract class Signal
             return collect();
         }
 
-        return $this->base()
-            ->when($type, fn (QueryBuilder $q) => $q->where('engageable_type', $type))
-            ->distinct()
-            ->get(['engageable_type', 'engageable_id'])
-            ->map(fn (object $row) => ['type' => $row->engageable_type, 'id' => $row->engageable_id]);
+        $subjects = collect();
+
+        foreach ($type !== null ? [$this->connectionName($type)] : $this->connections() as $connection) {
+            $subjects = $subjects->concat($this->db($connection)
+                ->when($type, fn (QueryBuilder $q) => $q->where('engageable_type', $type))
+                ->distinct()
+                ->get(['engageable_type', 'engageable_id'])
+                ->map(fn (object $row) => ['type' => $row->engageable_type, 'id' => $row->engageable_id]));
+        }
+
+        return $subjects;
     }
 
     /**
@@ -143,7 +155,7 @@ abstract class Signal
     public function forget(string $type, int|string $id): void
     {
         if ($this->table() !== null && $this->model() !== null) {
-            $this->base()->where('engageable_type', $type)->where('engageable_id', $id)->delete();
+            $this->base($type)->where('engageable_type', $type)->where('engageable_id', $id)->delete();
         }
     }
 
@@ -160,7 +172,21 @@ abstract class Signal
             return [];
         }
 
-        $guestRows = $this->base()->where('actor_key', $guestKey)
+        $moved = [];
+
+        foreach ($this->connections() as $connection) {
+            array_push($moved, ...$this->transferOn($connection, $guestKey, $account));
+        }
+
+        return $moved;
+    }
+
+    /**
+     * @return array<int, array{type: string, id: int|string}>
+     */
+    private function transferOn(?string $connection, string $guestKey, Actor $account): array
+    {
+        $guestRows = $this->db($connection)->where('actor_key', $guestKey)
             ->get(array_merge(['id', 'engageable_type', 'engageable_id'], $this->identity() ?? [], array_filter([$this->summed()])));
 
         if ($guestRows->isEmpty()) {
@@ -170,7 +196,7 @@ abstract class Signal
         if ($this->identity() !== null) {
             $columns = ['engageable_type', 'engageable_id', ...$this->identity()];
 
-            $accountRows = $this->base()
+            $accountRows = $this->db($connection)
                 ->where('actor_key', $account->key)
                 ->whereIn('engageable_id', $guestRows->pluck('engageable_id')->unique()->all())
                 ->get(['id', ...$columns])
@@ -184,14 +210,14 @@ abstract class Signal
                 }
 
                 if ($summed = $this->summed()) {
-                    $this->base()->where('id', $existing->id)->increment($summed, (int) $row->{$summed});
+                    $this->db($connection)->where('id', $existing->id)->increment($summed, (int) $row->{$summed});
                 }
 
-                $this->base()->where('id', $row->id)->delete();
+                $this->db($connection)->where('id', $row->id)->delete();
             }
         }
 
-        $this->base()->where('actor_key', $guestKey)->update([
+        $this->db($connection)->where('actor_key', $guestKey)->update([
             'actor_key' => $account->key,
             'user_id' => $account->userId(),
         ]);
@@ -232,7 +258,7 @@ abstract class Signal
      */
     protected function grouped(string $type, int|string $id, string $by, string $aggregate): Collection
     {
-        return $this->base()
+        return $this->base($type)
             ->where('engageable_type', $type)
             ->where('engageable_id', $id)
             ->groupBy($by)
@@ -251,14 +277,51 @@ abstract class Signal
         return app(Counters::class);
     }
 
-    protected function base(): QueryBuilder
+    /** This signal's table, on the connection that holds engagement about $type. */
+    protected function base(?string $type = null): QueryBuilder
     {
-        return $this->connection()->table((string) $this->table());
+        return $this->connection($type)->table((string) $this->table());
     }
 
-    protected function connection(): Connection
+    protected function connection(?string $type = null): Connection
     {
-        return (new ($this->model()))->getConnection();
+        return (new ($this->model()))->setConnection($this->connectionName($type))->getConnection();
+    }
+
+    /** The signal's table on one named connection (work that spans every connection). */
+    protected function db(?string $connection): QueryBuilder
+    {
+        return (new ($this->model()))->setConnection($connection)->getConnection()->table((string) $this->table());
+    }
+
+    private function connectionName(?string $type): ?string
+    {
+        if (! $this->followsSubject()) {
+            return (new ($this->model()))->getConnectionName();
+        }
+
+        return Connections::for($type) ?? (new ($this->model()))->getConnectionName();
+    }
+
+    /**
+     * Whether this signal's rows follow their subject's database
+     * (matrix.follow_subject_connection). A signal can stay on one
+     * database with matrix.signals.{name}.follow_subject = false, e.g. comments
+     * moderated in one place. Its totals still follow the subject.
+     */
+    public function followsSubject(): bool
+    {
+        return (bool) $this->config('follow_subject', true);
+    }
+
+    /**
+     * Connections that may hold this signal's rows.
+     *
+     * @return list<string|null>
+     */
+    protected function connections(): array
+    {
+        return $this->followsSubject() ? Connections::all() : [(new ($this->model()))->getConnectionName()];
     }
 
     /**

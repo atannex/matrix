@@ -40,7 +40,7 @@ class ViewSignal extends Signal
 
     public function recount(string $type, int|string $id): array
     {
-        $row = $this->base()
+        $row = $this->base($type)
             ->where('engageable_type', $type)
             ->where('engageable_id', $id)
             ->selectRaw('coalesce(sum(view_count), 0) as views, count(*) as unique_viewers')
@@ -76,7 +76,7 @@ class ViewSignal extends Signal
     {
         $now = now();
 
-        $view = $this->newQuery()->createOrFirst(
+        $view = $this->newQuery($item)->createOrFirst(
             $this->subjectKey($item) + ['actor_key' => $actor->key],
             [...$actor->attributes(['session_id', 'user_agent']), 'view_count' => 1, 'last_viewed_at' => $now],
         );
@@ -89,7 +89,7 @@ class ViewSignal extends Signal
         $windowStart = $now->copy()->subMinutes((int) $this->config('window', 30));
 
         // Conditional update: two beacons racing for the same view count once.
-        $counted = $this->newQuery()
+        $counted = $this->newQuery($item)
             ->whereKey($view->getKey())
             ->where(fn (Builder $q) => $q->whereNull('last_viewed_at')->orWhere('last_viewed_at', '<=', $windowStart))
             ->toBase()

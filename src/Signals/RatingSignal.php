@@ -37,7 +37,7 @@ class RatingSignal extends Signal
 
     public function recount(string $type, int|string $id): array
     {
-        $rows = $this->base()
+        $rows = $this->base($type)
             ->where('engageable_type', $type)
             ->where('engageable_id', $id)
             ->groupBy('dimension', 'value')
@@ -88,7 +88,7 @@ class RatingSignal extends Signal
             return null;
         }
 
-        $rating = $this->newQuery()->updateOrCreate(
+        $rating = $this->newQuery($item)->updateOrCreate(
             $this->subjectKey($item) + ['actor_key' => $actor->key, 'dimension' => $dimension],
             [...$actor->attributes(), 'value' => $value, 'comment' => $comment === null ? null : mb_substr(trim($comment), 0, 2000)],
         );

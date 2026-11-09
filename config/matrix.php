@@ -290,6 +290,18 @@ return [
 
     'connection' => env('MATRIX_DB_CONNECTION'),
 
+    /*
+    | An application that keeps some models on their own database (a model
+    | with its own $connection) can keep their engagement there too, so
+    | withMatrix(), orderByMatrix() and trending() still run in one query.
+    | Each such database needs the matrix tables. Work that spans every item
+    | (claiming a guest's rows, site-wide totals, rebuilds, pruning) runs on
+    | "connection" and on each of "connections".
+    */
+    'follow_subject_connection' => (bool) env('MATRIX_FOLLOW_SUBJECT_CONNECTION', false),
+
+    'connections' => [],
+
     // Key type of engageable models: integer, uuid or ulid (read by the migration).
     'morph_key' => 'integer',
 

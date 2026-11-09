@@ -40,7 +40,7 @@ class ReviewSignal extends Signal
 
     public function recount(string $type, int|string $id): array
     {
-        $row = $this->base()
+        $row = $this->base($type)
             ->where('engageable_type', $type)
             ->where('engageable_id', $id)
             ->where('status', Status::Approved->value)
@@ -110,7 +110,7 @@ class ReviewSignal extends Signal
         $body = trim($body);
 
         /** @var Review $review */
-        $review = $this->newQuery()->create([
+        $review = $this->newQuery($item)->create([
             ...$this->subjectKey($item),
             ...$actor->attributes(['session_id', 'user_agent'], fullIp: true),
             ...($actor->isGuest() ? $guest->attributes() : []),

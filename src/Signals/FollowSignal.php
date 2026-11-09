@@ -29,7 +29,7 @@ class FollowSignal extends Signal
 
     public function recount(string $type, int|string $id): array
     {
-        $count = $this->base()->where('engageable_type', $type)->where('engageable_id', $id)->count();
+        $count = $this->base($type)->where('engageable_type', $type)->where('engageable_id', $id)->count();
 
         return $count > 0 ? ['followers' => $count] : [];
     }
@@ -43,7 +43,7 @@ class FollowSignal extends Signal
     {
         $this->matrix()->guard($item, $this->name(), $actor);
 
-        $follow = $this->newQuery()->updateOrCreate(
+        $follow = $this->newQuery($item)->updateOrCreate(
             $this->subjectKey($item) + ['actor_key' => $actor->key],
             ['user_id' => $actor->userId(), 'ip_address' => $actor->anonymizedIp(), 'notify' => $notify],
         );

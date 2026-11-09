@@ -45,7 +45,7 @@ class CommentSignal extends Signal
 
     public function recount(string $type, int|string $id): array
     {
-        $count = $this->base()->where('engageable_type', $type)->where('engageable_id', $id)->where('status', Status::Approved->value)->count();
+        $count = $this->base($type)->where('engageable_type', $type)->where('engageable_id', $id)->where('status', Status::Approved->value)->count();
 
         return $count > 0 ? ['comments' => $count] : [];
     }
@@ -163,7 +163,7 @@ class CommentSignal extends Signal
         $this->ensureNotDuplicate($item, $actor, $body);
 
         /** @var Comment $comment */
-        $comment = $this->newQuery()->create([
+        $comment = $this->newQuery($item)->create([
             ...$this->subjectKey($item),
             ...$actor->attributes(['session_id', 'user_agent'], fullIp: true),
             ...($actor->isGuest() ? $guest->attributes() : []),

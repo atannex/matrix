@@ -27,6 +27,6 @@ class Click extends Model
 
     public function prunable(): Builder
     {
-        return static::query()->where('created_at', '<', now()->subDays((int) config('matrix.signals.click.retention', 90)));
+        return $this->newQuery()->where('created_at', '<', now()->subDays((int) config('matrix.signals.click.retention', 90)));
     }
 }

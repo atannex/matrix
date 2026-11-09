@@ -65,7 +65,7 @@ class ReactionSignal extends Signal
         }
 
         if ($reaction === null) {
-            $reaction = $this->newQuery()->createOrFirst(
+            $reaction = $this->newQuery($item)->createOrFirst(
                 $this->subjectKey($item) + ['actor_key' => $actor->key],
                 [...$actor->attributes(), 'type' => $type],
             );

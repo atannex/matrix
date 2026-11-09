@@ -9,6 +9,7 @@ use Atannex\Matrix\Matrix;
 use Atannex\Matrix\Models\Counter;
 use Atannex\Matrix\Stats;
 use Atannex\Matrix\Subject;
+use Atannex\Matrix\Support\Connections;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -80,62 +81,62 @@ trait InteractsWithMatrix
 
     public function matrixCounters(): MorphMany
     {
-        return $this->morphMany(config('matrix.models.counter'), 'engageable');
+        return $this->matrixMany('counter');
     }
 
     public function matrixDaily(): MorphMany
     {
-        return $this->morphMany(config('matrix.models.daily'), 'engageable');
+        return $this->matrixMany('daily');
     }
 
     public function views(): MorphMany
     {
-        return $this->morphMany(config('matrix.models.view'), 'engageable');
+        return $this->matrixMany('view');
     }
 
     public function clicks(): MorphMany
     {
-        return $this->morphMany(config('matrix.models.click'), 'engageable');
+        return $this->matrixMany('click');
     }
 
     public function shares(): MorphMany
     {
-        return $this->morphMany(config('matrix.models.share'), 'engageable');
+        return $this->matrixMany('share');
     }
 
     public function reactions(): MorphMany
     {
-        return $this->morphMany(config('matrix.models.reaction'), 'engageable');
+        return $this->matrixMany('reaction');
     }
 
     public function ratings(): MorphMany
     {
-        return $this->morphMany(config('matrix.models.rating'), 'engageable');
+        return $this->matrixMany('rating');
     }
 
     public function reviews(): MorphMany
     {
-        return $this->morphMany(config('matrix.models.review'), 'engageable');
+        return $this->matrixMany('review');
     }
 
     public function comments(): MorphMany
     {
-        return $this->morphMany(config('matrix.models.comment'), 'engageable');
+        return $this->matrixMany('comment');
     }
 
     public function bookmarks(): MorphMany
     {
-        return $this->morphMany(config('matrix.models.bookmark'), 'engageable');
+        return $this->matrixMany('bookmark');
     }
 
     public function follows(): MorphMany
     {
-        return $this->morphMany(config('matrix.models.follow'), 'engageable');
+        return $this->matrixMany('follow');
     }
 
     public function reports(): MorphMany
     {
-        return $this->morphMany(config('matrix.models.report'), 'engageable');
+        return $this->matrixMany('report');
     }
 
     /*
@@ -387,6 +388,26 @@ trait InteractsWithMatrix
             ->where('engageable_type', $model->getMorphClass())
             ->when($metric, fn (Builder $q) => $q->where('metric', $metric))
             ->where('day', '>=', $since->toDateString());
+    }
+
+    /**
+     * A matrix relation. With matrix.follow_subject_connection on, its rows
+     * are read on the connection that holds this item's engagement
+     * (Support\Connections), not just whatever Eloquent would inherit.
+     */
+    private function matrixMany(string $key): MorphMany
+    {
+        $class = config("matrix.models.{$key}");
+
+        if (! config('matrix.follow_subject_connection', false)) {
+            return $this->morphMany($class, 'engageable');
+        }
+
+        // A signal kept on one database (matrix.signals.{name}.follow_subject = false) is read there.
+        $connection = config("matrix.signals.{$key}.follow_subject", true) ? Connections::forItem($this) : (new $class)->getConnectionName();
+        $instance = (new $class)->setConnection($connection);
+
+        return $this->newMorphMany($instance->newQuery(), $this, $instance->qualifyColumn('engageable_type'), $instance->qualifyColumn('engageable_id'), $this->getKeyName());
     }
 
     private function selectAllColumns(Builder $query): void

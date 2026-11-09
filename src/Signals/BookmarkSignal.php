@@ -36,7 +36,7 @@ class BookmarkSignal extends Signal
 
     public function recount(string $type, int|string $id): array
     {
-        $count = $this->base()->where('engageable_type', $type)->where('engageable_id', $id)->distinct()->count('actor_key');
+        $count = $this->base($type)->where('engageable_type', $type)->where('engageable_id', $id)->distinct()->count('actor_key');
 
         return $count > 0 ? ['bookmarks' => $count] : [];
     }
@@ -55,7 +55,7 @@ class BookmarkSignal extends Signal
 
         $isNew = ! $this->has($item, $actor);
 
-        $bookmark = $this->newQuery()->updateOrCreate(
+        $bookmark = $this->newQuery($item)->updateOrCreate(
             $this->subjectKey($item) + ['actor_key' => $actor->key, 'collection' => $collection],
             ['user_id' => $actor->userId(), 'ip_address' => $actor->anonymizedIp()] + ($note === null ? [] : ['note' => mb_substr($note, 0, 500)]),
         );
@@ -84,7 +84,7 @@ class BookmarkSignal extends Signal
             return false;
         }
 
-        $this->newQuery()->whereKey($removed->modelKeys())->delete();
+        $this->newQuery($item)->whereKey($removed->modelKeys())->delete();
 
         $this->refresh($item);
         $this->matrix()->dispatch(new Unbookmarked($item, $actor, $removed->first(), ['collection' => $collection]));
@@ -115,11 +115,16 @@ class BookmarkSignal extends Signal
      */
     public function collections(Actor $actor): Collection
     {
-        return $this->base()->where('actor_key', $actor->key)
-            ->groupBy('collection')
-            ->selectRaw('collection, count(*) as total')
-            ->pluck('total', 'collection')
-            ->map(fn ($total) => (int) $total);
+        $totals = collect();
+
+        // An actor's bookmarks may sit on several connections (Support\Connections).
+        foreach ($this->connections() as $connection) {
+            foreach ($this->db($connection)->where('actor_key', $actor->key)->groupBy('collection')->selectRaw('collection, count(*) as total')->pluck('total', 'collection') as $collection => $total) {
+                $totals[$collection] = (int) ($totals[$collection] ?? 0) + (int) $total;
+            }
+        }
+
+        return $totals;
     }
 
     private function collection(string $collection): string

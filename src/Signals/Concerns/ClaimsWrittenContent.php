@@ -26,11 +26,13 @@ trait ClaimsWrittenContent
             return [];
         }
 
-        $this->base()
-            ->where('actor_key', $guestKey)
-            ->whereNull('user_id')
-            ->whereRaw('lower(guest_email) = ?', [mb_strtolower($email)])
-            ->update(['user_id' => $account->userId(), 'actor_key' => $account->key, 'updated_at' => now()]);
+        foreach ($this->connections() as $connection) {
+            $this->db($connection)
+                ->where('actor_key', $guestKey)
+                ->whereNull('user_id')
+                ->whereRaw('lower(guest_email) = ?', [mb_strtolower($email)])
+                ->update(['user_id' => $account->userId(), 'actor_key' => $account->key, 'updated_at' => now()]);
+        }
 
         return [];
     }

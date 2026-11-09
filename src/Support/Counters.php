@@ -59,11 +59,11 @@ final class Counters
         $key = ['engageable_type' => $type, 'engageable_id' => $id];
 
         foreach (array_filter($totals) as $metric => $amount) {
-            $this->add($this->table('counter'), $key + ['metric' => $this->metric($metric)], (int) $amount, $now);
+            $this->add($type, $this->table('counter'), $key + ['metric' => $this->metric($metric)], (int) $amount, $now);
         }
 
         foreach (array_filter($daily) as $metric => $amount) {
-            $this->add($this->table('daily'), $key + ['day' => $now->toDateString(), 'metric' => $this->metric($metric)], (int) $amount, $now);
+            $this->add($type, $this->table('daily'), $key + ['day' => $now->toDateString(), 'metric' => $this->metric($metric)], (int) $amount, $now);
         }
     }
 
@@ -86,15 +86,15 @@ final class Counters
             $values += $signal->recount($type, $id);
         }
 
-        $this->connection()->transaction(function () use ($type, $id, $values) {
-            $stale = $this->query('counter')
+        $this->connection($type)->transaction(function () use ($type, $id, $values) {
+            $stale = $this->query('counter', $type)
                 ->where('engageable_type', $type)
                 ->where('engageable_id', $id)
                 ->pluck('metric')
                 ->filter(fn (string $metric) => ! array_key_exists($metric, $values) && $this->signals->recountable($metric));
 
             if ($stale->isNotEmpty()) {
-                $this->query('counter')
+                $this->query('counter', $type)
                     ->where('engageable_type', $type)
                     ->where('engageable_id', $id)
                     ->whereIn('metric', $stale->all())
@@ -112,15 +112,15 @@ final class Counters
     {
         $values = $signal->recount($type, $id);
 
-        $this->connection()->transaction(function () use ($type, $id, $values, $signal) {
-            $stale = $this->query('counter')
+        $this->connection($type)->transaction(function () use ($type, $id, $values, $signal) {
+            $stale = $this->query('counter', $type)
                 ->where('engageable_type', $type)
                 ->where('engageable_id', $id)
                 ->pluck('metric')
                 ->filter(fn (string $metric) => ! array_key_exists($metric, $values) && $signal->owns($metric));
 
             if ($stale->isNotEmpty()) {
-                $this->query('counter')
+                $this->query('counter', $type)
                     ->where('engageable_type', $type)
                     ->where('engageable_id', $id)
                     ->whereIn('metric', $stale->all())
@@ -154,7 +154,7 @@ final class Counters
         ], array_keys($values), array_map('intval', $values));
 
         foreach (array_chunk($rows, 500) as $chunk) {
-            $this->query('counter')->upsert($chunk, ['engageable_type', 'engageable_id', 'metric'], ['value', 'updated_at']);
+            $this->query('counter', $type)->upsert($chunk, ['engageable_type', 'engageable_id', 'metric'], ['value', 'updated_at']);
         }
     }
 
@@ -190,7 +190,7 @@ final class Counters
     public function forget(string $type, int|string $id): void
     {
         foreach (['counter', 'daily'] as $table) {
-            $this->query($table)->where('engageable_type', $type)->where('engageable_id', $id)->delete();
+            $this->query($table, $type)->where('engageable_type', $type)->where('engageable_id', $id)->delete();
         }
     }
 
@@ -209,7 +209,7 @@ final class Counters
             return Stats::fromRows($item->getRelation('matrixCounters'), $item);
         }
 
-        $rows = $this->query('counter')
+        $rows = $this->query('counter', $item->getMorphClass())
             ->where('engageable_type', $item->getMorphClass())
             ->where('engageable_id', $item->getKey())
             ->get(['metric', 'value']);
@@ -230,7 +230,7 @@ final class Counters
         $stats = [];
 
         foreach ($items->groupBy(fn (Model $m) => $m->getMorphClass()) as $type => $group) {
-            $rows = $this->query('counter')
+            $rows = $this->query('counter', $type)
                 ->where('engageable_type', $type)
                 ->whereIn('engageable_id', $group->map->getKey()->all())
                 ->get(['engageable_id', 'metric', 'value'])
@@ -253,13 +253,13 @@ final class Counters
      */
     public function totals(array $metrics, ?string $type = null, mixed $ids = null): array
     {
-        $rows = $this->query('counter')
+        $rows = $this->summed($type, fn (Builder $q) => $q->from($this->table('counter'))
             ->whereIn('metric', $metrics)
             ->when($type, fn (Builder $q) => $q->where('engageable_type', $type))
             ->when($ids !== null, fn (Builder $q) => $q->whereIn('engageable_id', $ids))
             ->groupBy('metric')
             ->selectRaw('metric, coalesce(sum(value), 0) as total')
-            ->pluck('total', 'metric');
+            ->pluck('total', 'metric'));
 
         return array_map(fn (string $metric) => (int) ($rows[$metric] ?? 0), array_combine($metrics, $metrics));
     }
@@ -272,13 +272,13 @@ final class Counters
      */
     public function totalsBetween(CarbonInterface $from, CarbonInterface $to, array $metrics, ?string $type = null): array
     {
-        $rows = $this->query('daily')
+        $rows = $this->summed($type, fn (Builder $q) => $q->from($this->table('daily'))
             ->whereBetween('day', [$from->toDateString(), $to->toDateString()])
             ->whereIn('metric', $metrics)
             ->when($type, fn (Builder $q) => $q->where('engageable_type', $type))
             ->groupBy('metric')
             ->selectRaw('metric, coalesce(sum(value), 0) as total')
-            ->pluck('total', 'metric');
+            ->pluck('total', 'metric'));
 
         return array_map(fn (string $metric) => (int) ($rows[$metric] ?? 0), array_combine($metrics, $metrics));
     }
@@ -293,14 +293,14 @@ final class Counters
     {
         $prefix = $metric.'.';
 
-        return $this->query('daily')
+        return $this->summed($type, fn (Builder $q) => $q->from($this->table('daily'))
             ->whereBetween('day', [$from->toDateString(), $to->toDateString()])
             ->whereRaw("metric LIKE ? ESCAPE '!'", [str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $prefix).'%'])
             ->when($type, fn (Builder $q) => $q->where('engageable_type', $type))
             ->groupBy('metric')
             ->selectRaw('metric, coalesce(sum(value), 0) as total')
-            ->orderByDesc('total')
-            ->pluck('total', 'metric')
+            ->pluck('total', 'metric'))
+            ->sortDesc()
             ->mapWithKeys(fn ($total, string $key) => [substr($key, strlen($prefix)) => (int) $total])
             ->all();
     }
@@ -313,20 +313,25 @@ final class Counters
      */
     public function dailyBetween(CarbonInterface $from, CarbonInterface $to, array $metrics, ?Model $item = null, ?string $type = null): array
     {
-        $rows = $this->query('daily')
-            ->whereBetween('day', [$from->toDateString(), $to->toDateString()])
-            ->whereIn('metric', $metrics)
-            ->when($item, fn (Builder $q) => $q->where('engageable_type', $item->getMorphClass())->where('engageable_id', $item->getKey()))
-            ->when($type && ! $item, fn (Builder $q) => $q->where('engageable_type', $type))
-            ->groupBy('day', 'metric')
-            ->selectRaw('day, metric, coalesce(sum(value), 0) as total')
-            ->get()
-            ->groupBy(fn (object $row) => substr((string) $row->day, 0, 10));
+        $rows = collect();
+
+        foreach ($this->connectionsFor($item?->getMorphClass() ?? $type) as $connection) {
+            $rows = $rows->concat($this->db->connection($connection)->table($this->table('daily'))
+                ->whereBetween('day', [$from->toDateString(), $to->toDateString()])
+                ->whereIn('metric', $metrics)
+                ->when($item, fn (Builder $q) => $q->where('engageable_type', $item->getMorphClass())->where('engageable_id', $item->getKey()))
+                ->when($type && ! $item, fn (Builder $q) => $q->where('engageable_type', $type))
+                ->groupBy('day', 'metric')
+                ->selectRaw('day, metric, coalesce(sum(value), 0) as total')
+                ->get());
+        }
+
+        $rows = $rows->groupBy(fn (object $row) => substr((string) $row->day, 0, 10));
 
         $days = [];
 
         for ($day = $from->copy()->startOfDay(); $day->lte($to); $day->addDay()) {
-            $values = $rows->get($day->toDateString(), collect())->pluck('total', 'metric');
+            $values = $rows->get($day->toDateString(), collect())->groupBy('metric')->map(fn (Collection $group) => $group->sum('total'));
             $days[$day->toDateString()] = array_map(fn (string $m) => (int) ($values[$m] ?? 0), array_combine($metrics, $metrics));
         }
 
@@ -340,7 +345,7 @@ final class Counters
      */
     public function top(string $type, string $metric, CarbonInterface $since, int $limit = 10): Collection
     {
-        return $this->query('daily')
+        return $this->query('daily', $type)
             ->where('engageable_type', $type)
             ->where('metric', $metric)
             ->where('day', '>=', $since->toDateString())
@@ -362,14 +367,45 @@ final class Counters
         return (string) config("matrix.tables.{$key}");
     }
 
-    public function query(string $key): Builder
+    /** A query on the table, on the connection holding engagement about $type (Connections). */
+    public function query(string $key, ?string $type = null): Builder
     {
-        return $this->connection()->table($this->table($key));
+        return $this->connection($type)->table($this->table($key));
     }
 
-    public function connection(): ConnectionInterface
+    public function connection(?string $type = null): ConnectionInterface
     {
-        return $this->db->connection(config('matrix.connection'));
+        return $this->db->connection(Connections::for($type));
+    }
+
+    /**
+     * One type's connection, or every connection when the question spans all types.
+     *
+     * @return list<string|null>
+     */
+    private function connectionsFor(?string $type): array
+    {
+        return $type !== null ? [Connections::for($type)] : Connections::all();
+    }
+
+    /**
+     * A metric => total query run on each connection that may hold the
+     * rows, the totals added together.
+     *
+     * @param  callable(Builder): Collection<string, mixed>  $query
+     * @return Collection<string, int>
+     */
+    private function summed(?string $type, callable $query): Collection
+    {
+        $totals = collect();
+
+        foreach ($this->connectionsFor($type) as $connection) {
+            foreach ($query($this->db->connection($connection)->query()) as $metric => $total) {
+                $totals[$metric] = (int) ($totals[$metric] ?? 0) + (int) $total;
+            }
+        }
+
+        return $totals;
     }
 
     /**
@@ -377,14 +413,15 @@ final class Counters
      *
      * @param  array<string, mixed>  $key
      */
-    private function add(string $table, array $key, int $amount, CarbonInterface $now): void
+    private function add(string $type, string $table, array $key, int $amount, CarbonInterface $now): void
     {
-        $value = $this->connection()->getQueryGrammar()->wrap('value');
+        $connection = $this->connection($type);
+        $value = $connection->getQueryGrammar()->wrap('value');
 
-        $this->connection()->table($table)->upsert(
+        $connection->table($table)->upsert(
             [$key + ['value' => $amount, 'created_at' => $now, 'updated_at' => $now]],
             array_keys($key),
-            ['value' => $this->connection()->raw("{$value} + {$amount}"), 'updated_at' => $now],
+            ['value' => $connection->raw("{$value} + {$amount}"), 'updated_at' => $now],
         );
     }
 

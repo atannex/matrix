@@ -53,7 +53,7 @@ class ShareSignal extends Signal
             return null;
         }
 
-        $share = $this->newQuery()->firstOrNew($this->subjectKey($item) + ['actor_key' => $actor->key, 'platform' => $platform]);
+        $share = $this->newQuery($item)->firstOrNew($this->subjectKey($item) + ['actor_key' => $actor->key, 'platform' => $platform]);
 
         if ($share->exists) {
             $share->increment('share_count');
