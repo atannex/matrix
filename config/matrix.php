@@ -272,7 +272,11 @@ return [
     |--------------------------------------------------------------------------
     |
     | cleanup_on_delete: when an engageable model is deleted for good (not
-    | soft-deleted), its engagement rows and counters go with it.
+    | soft-deleted), its engagement rows and counters go with it, including
+    | what was recorded about its comments and reviews. When an account
+    | (user_model) is deleted for good, its reactions, bookmarks, follows,
+    | reports, comments and reviews go and the items they touched are
+    | recounted; its views, ratings, shares and clicks stay, anonymous.
     |
     */
 

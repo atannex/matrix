@@ -60,6 +60,24 @@ class SocialTest extends TestCase
         $article->matrix($this->guest())->follow();
     }
 
+    public function test_a_report_closed_by_a_moderator_cannot_be_reopened_by_its_author(): void
+    {
+        $article = $this->article();
+        $reporter = $this->guest();
+        $report = $article->matrix($reporter)->report('spam');
+
+        Matrix::signal('report')->resolve($report, $this->account($this->user('Mod', moderator: true)), ReportStatus::Dismissed);
+
+        try {
+            $article->matrix($reporter)->report('abuse');
+            $this->fail('A dismissed report must stay dismissed.');
+        } catch (\Illuminate\Validation\ValidationException) {
+        }
+
+        $this->assertSame(ReportStatus::Dismissed, $report->fresh()->status);
+        $this->assertSame(0, $article->matrixStats()->reports);
+    }
+
     public function test_reports_hide_content_past_the_threshold(): void
     {
         config(['matrix.reports.hide_threshold' => 2]);

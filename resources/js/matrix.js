@@ -34,6 +34,12 @@ function beacon(path, data) {
     fetch(`${BASE}/beacon/${path}`, { method: 'POST', body, credentials: 'same-origin', keepalive: true }).catch(() => {});
 }
 
+// What data-matrix-action may call.
+const ACTIONS = new Set([
+    'react', 'unreact', 'like', 'dislike', 'rate', 'unrate', 'unreview', 'share',
+    'bookmark', 'unbookmark', 'follow', 'unfollow', 'report', 'likeComment', 'deleteComment',
+]);
+
 export class Matrix {
     constructor(token) {
         if (!token) {
@@ -42,6 +48,7 @@ export class Matrix {
 
         this.token = token;
         this.viewed = false;
+        this.stopReading = null;
     }
 
     /* ------------------------------------------------------------------ */
@@ -82,15 +89,22 @@ export class Matrix {
 
     /**
      * Count seconds while the tab is visible and the reader was active in the
-     * last 30 s; report every 15 s and when the page is hidden.
+     * last 30 s; report every 15 s and when the page is hidden. Returns a
+     * function that reports what is left and stops tracking (call it when the
+     * item leaves the page, e.g. on client-side navigation).
      */
     trackReading({ idleAfter = 30, every = 15 } = {}) {
+        if (this.stopReading) {
+            return this.stopReading;
+        }
+
         let seconds = 0;
         let first = true;
         let lastActivity = Date.now();
 
         const active = () => { lastActivity = Date.now(); };
-        ['scroll', 'mousemove', 'keydown', 'touchstart'].forEach((e) => addEventListener(e, active, { passive: true }));
+        const activity = ['scroll', 'mousemove', 'keydown', 'touchstart'];
+        activity.forEach((e) => addEventListener(e, active, { passive: true }));
 
         const flush = () => {
             if (seconds > 0) {
@@ -100,7 +114,7 @@ export class Matrix {
             }
         };
 
-        setInterval(() => {
+        const timer = setInterval(() => {
             if (document.visibilityState === 'visible' && Date.now() - lastActivity < idleAfter * 1000) {
                 seconds++;
             }
@@ -110,8 +124,20 @@ export class Matrix {
             }
         }, 1000);
 
-        addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && flush());
+        const hidden = () => document.visibilityState === 'hidden' && flush();
+        addEventListener('visibilitychange', hidden);
         addEventListener('pagehide', flush);
+
+        this.stopReading = () => {
+            flush();
+            clearInterval(timer);
+            activity.forEach((e) => removeEventListener(e, active, { passive: true }));
+            removeEventListener('visibilitychange', hidden);
+            removeEventListener('pagehide', flush);
+            this.stopReading = null;
+        };
+
+        return this.stopReading;
     }
 
     trackClick({ placement = null, page = location.pathname } = {}) {
@@ -160,13 +186,13 @@ export class Matrix {
     rate(value, { dimension = 'overall', comment = null } = {}) { return this.request('POST', '/ratings', { value, dimension, comment }); }
     unrate(dimension = 'overall') { return this.request('DELETE', '/ratings', { dimension }); }
 
-    reviews({ perPage = 10, sort = 'helpful' } = {}) { return this.request('GET', `/reviews?per_page=${perPage}&sort=${sort}`); }
+    reviews({ perPage = 10, sort = 'helpful' } = {}) { return this.request('GET', `/reviews?${new URLSearchParams({ per_page: perPage, sort })}`); }
     review(body, { rating = null, title = null, guestName = null, guestEmail = null } = {}) {
         return this.request('POST', '/reviews', { body, rating, title, guest_name: guestName, guest_email: guestEmail });
     }
     unreview() { return this.request('DELETE', '/reviews'); }
 
-    comments({ limit = 20, offset = 0 } = {}) { return this.request('GET', `/comments?limit=${limit}&offset=${offset}`); }
+    comments({ limit = 20, offset = 0 } = {}) { return this.request('GET', `/comments?${new URLSearchParams({ limit, offset })}`); }
     comment(body, { replyTo = null, guestName = null, guestEmail = null } = {}) {
         return this.request('POST', '/comments', { body, reply_to: replyTo, guest_name: guestName, guest_email: guestEmail });
     }
@@ -196,7 +222,13 @@ export class Matrix {
      */
     static autoTrack(root = document) {
         root.querySelectorAll('[data-matrix-token]').forEach((element) => {
+            // Calling autoTrack again (after rendering more items) leaves bound elements alone.
+            if (element.matrix) {
+                return;
+            }
+
             const matrix = new Matrix(element.dataset.matrixToken);
+            element.matrix = matrix;
             const track = (element.dataset.matrixTrack || 'view').split(/\s+/);
 
             track.includes('view') && matrix.trackView(element);
@@ -205,7 +237,7 @@ export class Matrix {
             element.addEventListener('click', async (event) => {
                 const button = event.target.closest('[data-matrix-action]');
 
-                if (!button || typeof matrix[button.dataset.matrixAction] !== 'function') {
+                if (!button || !ACTIONS.has(button.dataset.matrixAction)) {
                     return;
                 }
 

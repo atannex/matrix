@@ -13,17 +13,26 @@ use Illuminate\Database\Eloquent\Relations\Relation;
  * beacons and API calls: proof the request comes from a page this site
  * rendered for that item, so engagement cannot be posted for arbitrary ids.
  *
- * Token: base64url("{morph type}|{id}|{issued at}") "." base64url(HMAC-SHA256)
+ * Token: base64url(AES-256-GCM("{morph type}|{id}|{issued at}")) "." base64url(HMAC-SHA256)
+ *
+ * The payload is encrypted, so a page never reveals which model or key an
+ * item has.
  */
 final class Tokens
 {
+    private const CIPHER = 'aes-256-gcm';
+
+    private const IV_LENGTH = 12;
+
+    private const TAG_LENGTH = 16;
+
     public function __construct(
         private readonly string $key,
     ) {}
 
     public function issue(Model $item): string
     {
-        $payload = $this->encode(implode('|', [$item->getMorphClass(), $item->getKey(), now()->getTimestamp()]));
+        $payload = $this->encode($this->encrypt(implode('|', [$item->getMorphClass(), $item->getKey(), now()->getTimestamp()])));
 
         return $payload.'.'.$this->sign($payload);
     }
@@ -40,7 +49,14 @@ final class Tokens
             return null;
         }
 
-        [$type, $id, $issuedAt] = array_pad(explode('|', (string) $this->decode($payload), 3), 3, null);
+        $decoded = $this->decode($payload);
+        $plain = $decoded === false ? false : $this->decrypt($decoded);
+
+        if ($plain === false) {
+            return null;
+        }
+
+        [$type, $id, $issuedAt] = array_pad(explode('|', $plain, 3), 3, null);
 
         $lifetime = (int) config('matrix.tokens.lifetime', 1440) * 60;
 
@@ -62,6 +78,32 @@ final class Tokens
     private function sign(string $payload): string
     {
         return $this->encode(hash_hmac('sha256', 'matrix|'.$payload, $this->key, true));
+    }
+
+    private function encrypt(string $plain): string
+    {
+        $iv = random_bytes(self::IV_LENGTH);
+        $cipher = openssl_encrypt($plain, self::CIPHER, $this->encryptionKey(), OPENSSL_RAW_DATA, $iv, $tag, '', self::TAG_LENGTH);
+
+        return $iv.$tag.$cipher;
+    }
+
+    private function decrypt(string $value): string|false
+    {
+        if (strlen($value) <= self::IV_LENGTH + self::TAG_LENGTH) {
+            return false;
+        }
+
+        $iv = substr($value, 0, self::IV_LENGTH);
+        $tag = substr($value, self::IV_LENGTH, self::TAG_LENGTH);
+
+        return openssl_decrypt(substr($value, self::IV_LENGTH + self::TAG_LENGTH), self::CIPHER, $this->encryptionKey(), OPENSSL_RAW_DATA, $iv, $tag);
+    }
+
+    /** A key of its own for encryption, derived from the signing key. */
+    private function encryptionKey(): string
+    {
+        return hash_hmac('sha256', 'matrix|encrypt', $this->key, true);
     }
 
     private function encode(string $value): string

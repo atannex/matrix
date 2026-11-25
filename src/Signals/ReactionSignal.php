@@ -23,6 +23,11 @@ class ReactionSignal extends Signal
         return 'reaction';
     }
 
+    public function belongsToAccount(): bool
+    {
+        return true;
+    }
+
     public function owns(string $metric): bool
     {
         return $metric === 'reactions' || str_starts_with($metric, 'reactions.');

@@ -12,6 +12,7 @@ use Atannex\Matrix\Events\ReviewRemoved;
 use Atannex\Matrix\Exceptions\EngagementRefused;
 use Atannex\Matrix\Models\Review;
 use Atannex\Matrix\Signals\Concerns\ClaimsWrittenContent;
+use Atannex\Matrix\Signals\Concerns\ForgetsContentEngagement;
 use Atannex\Matrix\Support\Moderation;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -27,6 +28,7 @@ use Illuminate\Validation\ValidationException;
 class ReviewSignal extends Signal
 {
     use ClaimsWrittenContent;
+    use ForgetsContentEngagement;
 
     public function name(): string
     {

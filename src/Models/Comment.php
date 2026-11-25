@@ -50,6 +50,24 @@ class Comment extends Model implements Engageable, Moderatable
             }
         });
 
+        // Replies go with their comment. Deleted here rather than by the
+        // foreign key alone, so what was recorded about them goes too.
+        static::deleting(function (Comment $comment) {
+            $replies = $comment->replyIds();
+
+            if ($replies === []) {
+                return;
+            }
+
+            if (config('matrix.cleanup_on_delete', true)) {
+                foreach ($replies as $id) {
+                    Matrix::forgetKey($comment->getMorphClass(), $id);
+                }
+            }
+
+            $comment->newQuery()->whereKey($replies)->delete();
+        });
+
         static::deleted(fn (Comment $comment) => Matrix::commentsChanged($comment));
     }
 
@@ -91,6 +109,24 @@ class Comment extends Model implements Engageable, Moderatable
     public function scopePinnedFirst(Builder $query): Builder
     {
         return $query->orderByRaw($query->qualifyColumn('pinned_at').' is null')->orderByDesc($query->qualifyColumn('pinned_at'));
+    }
+
+    /**
+     * Keys of every reply below this comment, at any depth.
+     *
+     * @return array<int, int|string>
+     */
+    public function replyIds(): array
+    {
+        $ids = [];
+        $level = [$this->getKey()];
+
+        while ($level !== []) {
+            $level = $this->newQuery()->whereIn('parent_id', $level)->pluck($this->getKeyName())->all();
+            array_push($ids, ...$level);
+        }
+
+        return $ids;
     }
 
     public function isReply(): bool

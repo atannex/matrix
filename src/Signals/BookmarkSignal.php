@@ -29,6 +29,11 @@ class BookmarkSignal extends Signal
         return ['collection'];
     }
 
+    public function belongsToAccount(): bool
+    {
+        return true;
+    }
+
     public function owns(string $metric): bool
     {
         return $metric === 'bookmarks';

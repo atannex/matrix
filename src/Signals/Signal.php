@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 /**
  * One kind of engagement. A signal knows its rows (model, table), how to
@@ -157,6 +158,56 @@ abstract class Signal
         if ($this->table() !== null && $this->model() !== null) {
             $this->base($type)->where('engageable_type', $type)->where('engageable_id', $id)->delete();
         }
+    }
+
+    /**
+     * Whether an account's rows go when the account is deleted (the
+     * migration cascades them). Otherwise they stay, anonymous.
+     */
+    public function belongsToAccount(): bool
+    {
+        return false;
+    }
+
+    /**
+     * An account is being deleted: remove its rows (belongsToAccount) or
+     * detach them from it, so a later account given the same id does not
+     * inherit them.
+     *
+     * @return array<int, array{type: string, id: int|string}> items whose totals changed
+     */
+    public function forgetUser(int|string $userId): array
+    {
+        if ($this->table() === null || $this->model() === null) {
+            return [];
+        }
+
+        $items = [];
+
+        foreach ($this->connections() as $connection) {
+            if (! $this->belongsToAccount()) {
+                $this->db($connection)->where('user_id', $userId)->update([
+                    'user_id' => null,
+                    'actor_key' => 'deleted_'.Str::uuid(),
+                ]);
+
+                continue;
+            }
+
+            $rows = $this->db($connection)->where('user_id', $userId)->distinct()->get(['engageable_type', 'engageable_id']);
+
+            if ($rows->isEmpty()) {
+                continue;
+            }
+
+            $this->db($connection)->where('user_id', $userId)->delete();
+
+            foreach ($rows as $row) {
+                $items[] = ['type' => $row->engageable_type, 'id' => $row->engageable_id];
+            }
+        }
+
+        return $items;
     }
 
     /**

@@ -29,6 +29,7 @@ use Atannex\Matrix\Support\Presenter;
 use Atannex\Matrix\Support\Throttle;
 use Atannex\Matrix\Support\Tokens;
 use Illuminate\Auth\Events\Login;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
@@ -83,6 +84,8 @@ class MatrixServiceProvider extends ServiceProvider
                 ->group(__DIR__.'/../routes/matrix.php');
         }
 
+        $this->forgetDeletedUsers();
+
         if (config('matrix.claim_on_login', true)) {
             $this->app['events']->listen(Login::class, ClaimGuestActivity::class);
         }
@@ -99,5 +102,26 @@ class MatrixServiceProvider extends ServiceProvider
                 PruneCommand::class,
             ]);
         }
+    }
+
+    /**
+     * Before an account is deleted for good (the database would cascade or
+     * null its rows behind the counters' back), clean up after it.
+     */
+    private function forgetDeletedUsers(): void
+    {
+        $model = config('matrix.user_model');
+
+        if (! is_string($model) || ! class_exists($model) || ! is_subclass_of($model, Model::class)) {
+            return;
+        }
+
+        $this->app['events']->listen("eloquent.deleting: {$model}", function (Model $user) {
+            $soft = method_exists($user, 'isForceDeleting') && ! $user->isForceDeleting();
+
+            if (! $soft && config('matrix.cleanup_on_delete', true)) {
+                $this->app->make(Matrix::class)->forgetUser($user->getKey());
+            }
+        });
     }
 }

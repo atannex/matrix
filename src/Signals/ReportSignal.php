@@ -27,6 +27,11 @@ class ReportSignal extends Signal
         return 'report';
     }
 
+    public function belongsToAccount(): bool
+    {
+        return true;
+    }
+
     public function owns(string $metric): bool
     {
         return $metric === 'reports';
@@ -57,10 +62,16 @@ class ReportSignal extends Signal
             $this->guardReportable($item, $actor);
         }
 
+        // A moderator's decision stands: the reporter cannot reopen it by reporting again.
+        $closed = $this->about($item)->where('actor_key', $actor->key)->where('status', '!=', ReportStatus::Open->value)->exists();
+
+        if ($closed) {
+            throw ValidationException::withMessages(['reason' => __('A moderator has already looked at your report.')]);
+        }
+
         $report = $this->newQuery($item)->updateOrCreate(
             $this->subjectKey($item) + ['actor_key' => $actor->key],
-            [...$actor->attributes(fullIp: true), 'reason' => $reason, 'details' => $details === null ? null : mb_substr(trim($details), 0, 2000),
-                'status' => ReportStatus::Open, 'resolved_by' => null, 'resolved_at' => null, 'resolution' => null],
+            [...$actor->attributes(fullIp: true), 'reason' => $reason, 'details' => $details === null ? null : mb_substr(trim($details), 0, 2000), 'status' => ReportStatus::Open],
         );
 
         $this->refresh($item);

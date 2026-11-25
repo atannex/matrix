@@ -320,13 +320,45 @@ final class Matrix
      */
     public function forget(Model $item): void
     {
-        [$type, $id] = [$item->getMorphClass(), $item->getKey()];
+        $this->forgetKey($item->getMorphClass(), $item->getKey());
+    }
 
+    /**
+     * Remove everything recorded about an item by morph type and key.
+     */
+    public function forgetKey(string $type, int|string $id): void
+    {
         foreach ($this->signals->all() as $signal) {
             $signal->forget($type, $id);
         }
 
         $this->counters->forget($type, $id);
+    }
+
+    /**
+     * An account is being deleted: remove what belongs to it, anonymise the
+     * rest and recount the items it touched.
+     *
+     * @return int items whose totals changed
+     */
+    public function forgetUser(Authenticatable|int|string $user): int
+    {
+        $id = $user instanceof Authenticatable ? $user->getAuthIdentifier() : $user;
+        $affected = [];
+
+        $this->transactionOnEach(Connections::all(), function () use ($id, &$affected) {
+            foreach ($this->signals->all() as $signal) {
+                foreach ($signal->forgetUser($id) as $item) {
+                    $affected[$item['type'].'|'.$item['id']] = $item;
+                }
+            }
+        });
+
+        foreach ($affected as $item) {
+            $this->counters->recountKey($item['type'], $item['id']);
+        }
+
+        return count($affected);
     }
 
     public function dispatch(Engagement $event): void

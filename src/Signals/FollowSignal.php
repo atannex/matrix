@@ -22,6 +22,11 @@ class FollowSignal extends Signal
         return 'follow';
     }
 
+    public function belongsToAccount(): bool
+    {
+        return true;
+    }
+
     public function owns(string $metric): bool
     {
         return $metric === 'followers';

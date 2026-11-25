@@ -13,6 +13,7 @@ use Atannex\Matrix\Events\CommentRemoved;
 use Atannex\Matrix\Exceptions\EngagementRefused;
 use Atannex\Matrix\Models\Comment;
 use Atannex\Matrix\Signals\Concerns\ClaimsWrittenContent;
+use Atannex\Matrix\Signals\Concerns\ForgetsContentEngagement;
 use Atannex\Matrix\Support\Moderation;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -29,6 +30,7 @@ use Illuminate\Validation\ValidationException;
 class CommentSignal extends Signal
 {
     use ClaimsWrittenContent;
+    use ForgetsContentEngagement;
 
     /** @var array<int|string, mixed> relations loaded with every comment */
     private array $with = ['user'];

@@ -109,6 +109,15 @@ class ApiTest extends TestCase
         $this->postJson("/matrix/{$token}/reactions", ['type' => 'like'])->assertOk();
         $this->postJson("/matrix/{$token}/reactions", ['type' => 'like'])->assertStatus(422)->assertJsonValidationErrors('type');
     }
+
+    public function test_array_inputs_are_rejected_instead_of_crashing(): void
+    {
+        $token = $this->article()->matrixToken();
+
+        $this->deleteJson("/matrix/{$token}/bookmark", ['collection' => ['x']])->assertStatus(422);
+        $this->deleteJson("/matrix/{$token}/ratings", ['dimension' => ['x']])->assertStatus(422);
+        $this->getJson("/matrix/{$token}/reviews?sort[]=x")->assertStatus(422);
+    }
 }
 
 final class ArticleLinks implements ResolvesClickTargets

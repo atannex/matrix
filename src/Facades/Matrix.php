@@ -25,6 +25,8 @@ use Illuminate\Support\Facades\Facade;
  * @method static void reviewsChanged(\Atannex\Matrix\Models\Review $review)
  * @method static int claim(string $guestKey, \Atannex\Matrix\Actor $account)
  * @method static void forget(\Illuminate\Database\Eloquent\Model $item)
+ * @method static void forgetKey(string $type, int|string $id)
+ * @method static int forgetUser(\Illuminate\Contracts\Auth\Authenticatable|int|string $user)
  * @method static \Atannex\Matrix\Support\Counters counters()
  * @method static \Atannex\Matrix\Support\Throttle throttle()
  * @method static \Atannex\Matrix\Support\Tokens tokens()

@@ -63,14 +63,17 @@ final class EngagementController extends Controller
 
     public function unrate(Request $request, string $token): JsonResponse
     {
-        $this->subject($this->matrix, $token)->throttled('value')->unrate($request->string('dimension', 'overall')->toString());
+        $data = $request->validate(['dimension' => ['sometimes', 'string', 'max:40']]);
+
+        $this->subject($this->matrix, $token)->throttled('value')->unrate($data['dimension'] ?? 'overall');
 
         return $this->respond($token);
     }
 
     public function reviews(Request $request, string $token): JsonResponse
     {
-        $page = $this->subject($this->matrix, $token)->reviews(min(50, max(1, $request->integer('per_page', 10))), $request->string('sort', 'helpful')->toString());
+        $data = $request->validate(['sort' => ['sometimes', 'string', 'max:20']]);
+        $page = $this->subject($this->matrix, $token)->reviews(min(50, max(1, $request->integer('per_page', 10))), $data['sort'] ?? 'helpful');
         $actor = $this->matrix->actor();
 
         return response()->json([
@@ -175,7 +178,9 @@ final class EngagementController extends Controller
 
     public function unbookmark(Request $request, string $token): JsonResponse
     {
-        $this->subject($this->matrix, $token)->throttled('collection')->unbookmark($request->input('collection'));
+        $data = $request->validate(['collection' => ['nullable', 'string', 'max:60']]);
+
+        $this->subject($this->matrix, $token)->throttled('collection')->unbookmark($data['collection'] ?? null);
 
         return $this->respond($token);
     }
